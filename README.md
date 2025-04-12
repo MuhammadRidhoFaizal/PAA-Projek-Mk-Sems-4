@@ -21,7 +21,6 @@ MARGIN = 5
 
 map_pixels = pygame.surfarray.array3d(map_image)
 
-# Cek apakah pixel bisa dilewati
 def is_passable(x, y):
     if 0 <= x < WIDTH and 0 <= y < HEIGHT:
         r, g, b = map_pixels[x, y]
