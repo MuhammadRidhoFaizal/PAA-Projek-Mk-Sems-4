@@ -1,128 +1,174 @@
-# PAA-Projek-Mk-Sems-4
 import pygame
+import sys
 import random
-import heapq
-import os
+import math
+import time
+from collections import deque
+
+MAP_PATH = "MAP.png"
+SEEK_IMAGE_PATH = "seek_arrow.png"
+HIDE_IMAGE_PATH = "hide_shield.png"
+WALKABLE_COLOR = (150, 150, 150)
+ICON_SIZE = (40, 40)
 
 pygame.init()
-
-map_image = pygame.image.load("MAP.png")
-WIDTH, HEIGHT = map_image.get_width(), map_image.get_height()
+map_image = pygame.image.load(MAP_PATH)
+WIDTH, HEIGHT = map_image.get_size()
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Hide and Seek Game")
+pygame.display.set_caption("Hide and Seek")
 
-seek_img = pygame.image.load("seek_arrow.png")
-hide_img = pygame.image.load("hide_shield.png")
-seek_img = pygame.transform.scale(seek_img, (40, 40))
-hide_img = pygame.transform.scale(hide_img, (40, 40))
+font = pygame.font.SysFont(None, 36)
+big_font = pygame.font.SysFont(None, 64)
+clock = pygame.time.Clock()
 
-PASSABLE_COLOR = (150, 150, 150)
-MARGIN = 5
+# Load dan resize ikon
+def load_image(path):
+    img = pygame.image.load(path).convert_alpha()
+    return pygame.transform.smoothscale(img, ICON_SIZE)
 
-map_pixels = pygame.surfarray.array3d(map_image)
-
-def is_passable(x, y):
-    if 0 <= x < WIDTH and 0 <= y < HEIGHT:
-        r, g, b = map_pixels[x, y]
-        return (r, g, b) == PASSABLE_COLOR
-    return False
+seek_icon = load_image(SEEK_IMAGE_PATH)
+hide_icon = load_image(HIDE_IMAGE_PATH)
 
 def get_random_edge_position():
-    for _ in range(10000):
+    for _ in range(1000):
         side = random.choice(["top", "bottom", "left", "right"])
         if side == "top":
-            x, y = random.randint(0, WIDTH - 1), random.randint(0, MARGIN)
+            x, y = random.randint(0, WIDTH - 1), 5
         elif side == "bottom":
-            x, y = random.randint(0, WIDTH - 1), random.randint(HEIGHT - MARGIN, HEIGHT - 1)
+            x, y = random.randint(0, WIDTH - 1), HEIGHT - 6
         elif side == "left":
-            x, y = random.randint(0, MARGIN), random.randint(0, HEIGHT - 1)
-        else:  # right
-            x, y = random.randint(WIDTH - MARGIN, WIDTH - 1), random.randint(0, HEIGHT - 1)
-        if is_passable(x, y):
+            x, y = 5, random.randint(0, HEIGHT - 1)
+        else:
+            x, y = WIDTH - 6, random.randint(0, HEIGHT - 1)
+
+        if map_image.get_at((x, y))[:3] == WALKABLE_COLOR:
             return x, y
     return None
 
-def heuristic(a, b):
-    return abs(a[0]-b[0]) + abs(a[1]-b[1])
+def find_path(start, goal):
+    queue = deque()
+    queue.append((start, [start]))
+    visited = set()
+    visited.add(start)
 
-def a_star(start, goal):
-    open_set = []
-    heapq.heappush(open_set, (0, start))
-    came_from = {}
-    g_score = {start: 0}
-    while open_set:
-        _, current = heapq.heappop(open_set)
-        if current == goal:
-            path = []
-            while current in came_from:
-                path.append(current)
-                current = came_from[current]
-            path.reverse()
+    while queue:
+        (x, y), path = queue.popleft()
+
+        if (x, y) == goal:
             return path
-        for dx, dy in [(-1,0),(1,0),(0,-1),(0,1)]:
-            neighbor = (current[0]+dx, current[1]+dy)
-            if not is_passable(*neighbor):
-                continue
-            tentative_g = g_score[current] + 1
-            if neighbor not in g_score or tentative_g < g_score[neighbor]:
-                came_from[neighbor] = current
-                g_score[neighbor] = tentative_g
-                f = tentative_g + heuristic(neighbor, goal)
-                heapq.heappush(open_set, (f, neighbor))
+
+        for dx, dy in [(-1,0), (1,0), (0,-1), (0,1)]:
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < WIDTH and 0 <= ny < HEIGHT:
+                if (nx, ny) not in visited:
+                    if map_image.get_at((nx, ny))[:3] == WALKABLE_COLOR:
+                        visited.add((nx, ny))
+                        queue.append(((nx, ny), path + [(nx, ny)]))
     return []
 
-def draw_seek(pos):
-    rect = seek_img.get_rect(center=pos)
-    screen.blit(seek_img, rect)
+def rotate_image(image, angle):
+    return pygame.transform.rotate(image, -angle)
 
-def draw_hide(pos):
-    rect = hide_img.get_rect(center=pos)
-    screen.blit(hide_img, rect)
+def show_centered_text(text, font, color, duration=3):
+    start_time = time.time()
+    while time.time() - start_time < duration:
+        screen.blit(map_image, (0, 0))
+        text_surf = font.render(text, True, color)
+        text_rect = text_surf.get_rect(center=(WIDTH // 2, HEIGHT // 2))
+        screen.blit(text_surf, text_rect)
+        pygame.display.flip()
+        clock.tick(60)
 
-font = pygame.font.SysFont(None, 32)
-start_button = pygame.Rect(10, 10, 80, 35)
-stop_button = pygame.Rect(100, 10, 80, 35)
-
-def draw_buttons():
-    pygame.draw.rect(screen, (0, 255, 0), start_button)
-    pygame.draw.rect(screen, (255, 0, 0), stop_button)
-    screen.blit(font.render("START", True, (255,255,255)), (20, 15))
-    screen.blit(font.render("STOP", True, (255,255,255)), (115, 15))
+start_button = pygame.Rect(10, 10, 80, 40)
+stop_button = pygame.Rect(100, 10, 80, 40)
 
 running = True
-started = False
+game_active = False
 path = []
-seek_pos = get_random_edge_position()
-hide_pos = get_random_edge_position()
+start_time = None
+elapsed_time = 0
+path_index = 0
+show_found_timer = 0
+
+show_centered_text("Halo, semoga menyenangkan!", big_font, (0, 0, 0), duration=2)
 
 while running:
     screen.blit(map_image, (0, 0))
-    draw_buttons()
+    mouse_pos = pygame.mouse.get_pos()
+
+    # Tombol
+    pygame.draw.rect(screen, (0, 200, 0), start_button)
+    pygame.draw.rect(screen, (200, 0, 0), stop_button)
+    screen.blit(font.render("START", True, (255,255,255)), (15, 15))
+    screen.blit(font.render("STOP", True, (255,255,255)), (110, 15))
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
-        elif event.type == pygame.MOUSEBUTTONDOWN:
-            if start_button.collidepoint(event.pos):
-                started = True
-                seek_pos = get_random_edge_position()
-                hide_pos = get_random_edge_position()
-                if seek_pos and hide_pos:
-                    path = a_star(seek_pos, hide_pos)
-            elif stop_button.collidepoint(event.pos):
-                started = False
-                path = []
 
-    if started and path:
-        if seek_pos != hide_pos:
-            seek_pos = path.pop(0)
-        draw_hide(hide_pos)
-        draw_seek(seek_pos)
-    elif started:
-        draw_hide(hide_pos)
-        draw_seek(seek_pos)
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if start_button.collidepoint(mouse_pos):
+                start = get_random_edge_position()
+                end = get_random_edge_position()
+                if start and end:
+                    path = find_path(start, end)
+                    path_index = 0
+                    start_time = time.time()
+                    elapsed_time = 0
+                    game_active = True
+                    hide_pos = end
+                    show_found_timer = 0
+                    print("Start:", start, "End:", end)
+                else:
+                    print("Tidak ditemukan titik jalan valid di tepi.")
+            elif stop_button.collidepoint(mouse_pos):
+                game_active = False
+
+    # Game aktif
+    if game_active and path and path_index < len(path):
+        seek_pos = path[path_index]
+
+        if path_index + 1 < len(path):
+            next_pos = path[path_index + 1]
+            dx = next_pos[0] - seek_pos[0]
+            dy = next_pos[1] - seek_pos[1]
+            angle = math.degrees(math.atan2(dy, dx))  # <- arah benar
+        else:
+            angle = 0
+
+        rotated_seek = rotate_image(seek_icon, angle)
+
+        # Gambar seeker dan hider
+        seek_rect = rotated_seek.get_rect(center=seek_pos)
+        screen.blit(rotated_seek, seek_rect)
+
+        hide_rect = hide_icon.get_rect(center=hide_pos)
+        screen.blit(hide_icon, hide_rect)
+
+        path_index += 1
+        elapsed_time = int(time.time() - start_time)
+
+        # Cek apakah seeker menyentuh hider
+        if abs(seek_pos[0] - hide_pos[0]) < 3 and abs(seek_pos[1] - hide_pos[1]) < 3:
+            show_found_timer = time.time()
+            game_active = False
+
+    elif show_found_timer > 0 and time.time() - show_found_timer < 5:
+        text = big_font.render("Target ditemukan", True, (255, 0, 0))
+        rect = text.get_rect(center=(WIDTH // 2, HEIGHT // 2))
+        screen.blit(text, rect)
+
+    elif show_found_timer > 0 and time.time() - show_found_timer >= 5:
+        show_centered_text("Terima kasih telah bermain!", big_font, (0, 0, 0), duration=3)
+        show_found_timer = 0
+
+    # Timer tampil
+    if start_time and not show_found_timer:
+        time_text = font.render(f"Waktu: {elapsed_time} detik", True, (0, 0, 0))
+        screen.blit(time_text, (WIDTH // 2 - 80, 10))
 
     pygame.display.flip()
-    pygame.time.delay(10)
+    clock.tick(60)
 
 pygame.quit()
+sys.exit()
