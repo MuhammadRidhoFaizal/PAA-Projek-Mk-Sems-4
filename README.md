@@ -21,7 +21,6 @@ font = pygame.font.SysFont(None, 36)
 big_font = pygame.font.SysFont(None, 64)
 clock = pygame.time.Clock()
 
-# Load dan resize ikon
 def load_image(path):
     img = pygame.image.load(path).convert_alpha()
     return pygame.transform.smoothscale(img, ICON_SIZE)
