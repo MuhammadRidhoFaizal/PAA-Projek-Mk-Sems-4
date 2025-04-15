@@ -95,7 +95,6 @@ while running:
     screen.blit(map_image, (0, 0))
     mouse_pos = pygame.mouse.get_pos()
 
-    # Tombol
     pygame.draw.rect(screen, (0, 200, 0), start_button)
     pygame.draw.rect(screen, (200, 0, 0), stop_button)
     screen.blit(font.render("START", True, (255,255,255)), (15, 15))
@@ -123,7 +122,6 @@ while running:
             elif stop_button.collidepoint(mouse_pos):
                 game_active = False
 
-    # Game aktif
     if game_active and path and path_index < len(path):
         seek_pos = path[path_index]
 
@@ -137,7 +135,6 @@ while running:
 
         rotated_seek = rotate_image(seek_icon, angle)
 
-        # Gambar seeker dan hider
         seek_rect = rotated_seek.get_rect(center=seek_pos)
         screen.blit(rotated_seek, seek_rect)
 
@@ -161,7 +158,6 @@ while running:
         show_centered_text("Terima kasih telah bermain!", big_font, (0, 0, 0), duration=3)
         show_found_timer = 0
 
-    # Timer tampil
     if start_time and not show_found_timer:
         time_text = font.render(f"Waktu: {elapsed_time} detik", True, (0, 0, 0))
         screen.blit(time_text, (WIDTH // 2 - 80, 10))
