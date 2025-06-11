@@ -7,7 +7,10 @@ from collections import deque
 import tkinter as tk
 from tkinter import filedialog
 
-ICON_SIZE = (40, 40)
+SEEKER_SIZE = (20, 20)
+PACKAGE_SIZE = (18, 18)
+HIDE_SIZE = (20, 20)
+
 WALKABLE_MIN = (90, 90, 90)
 WALKABLE_MAX = (150, 150, 150)
 
@@ -16,9 +19,9 @@ font = pygame.font.SysFont(None, 36)
 button_font = pygame.font.SysFont(None, 28)
 clock = pygame.time.Clock()
 
-def load_image(path):
+def load_image(path, size):
     img = pygame.image.load(path).convert_alpha()
-    return pygame.transform.smoothscale(img, ICON_SIZE)
+    return pygame.transform.smoothscale(img, size)
 
 def select_map_file_dialog():
     root = tk.Tk()
@@ -47,11 +50,15 @@ def find_path(start, goal):
         (x, y), path = queue.popleft()
         if (x, y) == goal:
             return path
-        for dx, dy in [(-1,0), (1,0), (0,-1), (0,1)]:
+        for dx, dy in [(-1,0), (1,0), (0,-1), (0,1), (-1,-1), (1,1), (-1,1), (1,-1)]:
             nx, ny = x + dx, y + dy
             if 0 <= nx < WIDTH and 0 <= ny < HEIGHT:
                 if (nx, ny) not in visited:
                     if is_road(map_image.get_at((nx, ny))[:3]):
+                        # Validasi agar tidak menabrak sudut saat diagonal
+                        if abs(dx) + abs(dy) == 2:
+                            if not (is_road(map_image.get_at((x + dx, y))[:3]) and is_road(map_image.get_at((x, y + dy))[:3])):
+                                continue
                         visited.add((nx, ny))
                         queue.append(((nx, ny), path + [(nx, ny)]))
     return []
@@ -85,7 +92,6 @@ def show_end_screen():
 
     waiting = True
     while waiting:
-        mouse_pos = pygame.mouse.get_pos()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -124,47 +130,60 @@ paused = False
 game_active = False
 stage = "pickup"
 
-seek_icon = load_image("seek_arrow.png")
-hide_icon = load_image("hide_shield.png")
-package_icon = load_image("paket.jpg")
-
-start_button = pygame.Rect(920, 20, 80, 40)
-shuffle_button = pygame.Rect(1010, 20, 80, 40)
-pause_button = pygame.Rect(1100, 20, 80, 40)
+seek_icon = load_image("seek_arrow.png", SEEKER_SIZE)
+hide_icon = load_image("hide_shield.png", HIDE_SIZE)
+package_icon = load_image("paket.jpg", PACKAGE_SIZE)
 
 running = True
 while running:
     screen.fill((230, 230, 230))
-
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
-
         elif event.type == pygame.MOUSEBUTTONDOWN:
-            if start_button.collidepoint(event.pos) and map_loaded:
-                reset_game()
-            elif shuffle_button.collidepoint(event.pos) and map_loaded:
-                start = get_random_road_position()
-                package_pos = get_random_road_position()
-                hide_pos = get_random_road_position()
-                seeker_pos = start
-                path = find_path(start, package_pos)
-                path_index = 0
-                pickup_done = False
-                paused = False
-                game_active = False
-            elif pause_button.collidepoint(event.pos):
-                if game_active:
-                    paused = not paused
+            if map_loaded:
+                if start_button.collidepoint(event.pos):
+                    reset_game()
+                elif shuffle_button.collidepoint(event.pos):
+                    start = get_random_road_position()
+                    package_pos = get_random_road_position()
+                    hide_pos = get_random_road_position()
+                    seeker_pos = start
+                    path = find_path(start, package_pos)
+                    path_index = 0
+                    pickup_done = False
+                    paused = False
+                    game_active = False
+                elif pause_button.collidepoint(event.pos):
+                    if game_active:
+                        paused = not paused
+            else:
+                if shuffle_button.collidepoint(event.pos):
+                    file = select_map_file_dialog()
+                    if file:
+                        img = pygame.image.load(file)
+                        w, h = img.get_size()
+                        if 1000 <= w <= 1500 and 700 <= h <= 1000:
+                            map_image = img
+                            WIDTH, HEIGHT = map_image.get_size()
+                            screen = pygame.display.set_mode((WIDTH, HEIGHT))
+                            start = get_random_road_position()
+                            package_pos = get_random_road_position()
+                            hide_pos = get_random_road_position()
+                            seeker_pos = start
+                            path = find_path(start, package_pos)
+                            map_loaded = True
 
     if map_loaded:
         screen.blit(map_image, (0, 0))
 
- 
+        start_button = pygame.Rect(WIDTH - 280, 20, 80, 40)
+        shuffle_button = pygame.Rect(WIDTH - 190, 20, 80, 40)
+        pause_button = pygame.Rect(WIDTH - 100, 20, 80, 40)
+
         draw_button(start_button, "START")
         draw_button(shuffle_button, "ACAK")
         draw_button(pause_button, "JEDA" if not paused else "LANJUT")
-
 
         if start_time and not end_time:
             elapsed_time = int(time.time() - start_time)
@@ -203,32 +222,11 @@ while running:
                 elapsed_time = int(end_time - start_time)
                 if show_end_screen():
                     continue
-
     else:
         title = font.render("SMART KURIR", True, (0, 100, 200))
         screen.blit(title, (screen.get_width() // 2 - title.get_width() // 2, 250))
+        shuffle_button = pygame.Rect(screen.get_width() // 2 - 40, 350, 80, 40)
         draw_button(shuffle_button, "PILIH PETA")
-        pygame.display.flip()
-
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                if shuffle_button.collidepoint(event.pos):
-                    file = select_map_file_dialog()
-                    if file:
-                        img = pygame.image.load(file)
-                        w, h = img.get_size()
-                        if 1000 <= w <= 1500 and 700 <= h <= 1000:
-                            map_image = img
-                            WIDTH, HEIGHT = map_image.get_size()
-                            screen = pygame.display.set_mode((WIDTH, HEIGHT))
-                            start = get_random_road_position()
-                            package_pos = get_random_road_position()
-                            hide_pos = get_random_road_position()
-                            seeker_pos = start
-                            path = find_path(start, package_pos)
-                            map_loaded = True
 
     pygame.display.flip()
     clock.tick(60)
